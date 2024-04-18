@@ -21,6 +21,9 @@ static void UpdateHwndScaling(HWND hWnd) {
 		return;
 	}
 
+	// Retrieve scaling information from window properties
+	// 从窗口属性中检索缩放信息
+
 	hwndSrc = (HWND)GetProp(hwndScaling, L"Magpie.SrcHWND");
 
 	srcRect.left = (LONG)(INT_PTR)GetProp(hwndScaling, L"Magpie.SrcLeft");
@@ -59,15 +62,18 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	if (message == WM_MAGPIE_SCALINGCHANGED) {
 		switch (wParam) {
 		case 0:
-			// 缩放已停止
+			// Scaling ended
+			// 缩放已结束
 			UpdateHwndScaling(NULL);
 			InvalidateRect(hWnd, nullptr, TRUE);
 			break;
 		case 1:
+			// Scaling started
 			// 缩放已开始
 			UpdateHwndScaling((HWND)lParam);
 			InvalidateRect(hWnd, nullptr, TRUE);
 
+			// Once scaling begins, place our window above magpie scaling window
 			// 缩放开始后将本窗口置于缩放窗口上面
 			BringWindowToTop(hWnd);
 			break;
@@ -107,7 +113,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		std::wstring text = []() -> std::wstring {
 			if (!hwndScaling) {
-				return L"未缩放";
+				return L"Not scaling";
 			}
 
 			std::wstring srcTitle(GetWindowTextLength(hwndSrc), 0);
@@ -116,7 +122,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			double factor = double(destRect.right - destRect.left) / (srcRect.right - srcRect.left);
 			factor = int(factor * 1000) / 1000.0;
 
-			return std::format(L"缩放中\n\n源窗口: {}\n缩放比例: {}", srcTitle, factor);
+			return std::format(L"Scaling\n\nSource window: {}\nScale factor: {}", srcTitle, factor);
 		}();
 
 		RECT clientRect;
@@ -149,6 +155,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_ LPWSTR    lpCmdLine,
 	_In_ int       nCmdShow
 ) {
+	// Ensure the MagpieScalingChanged message won't be filtered by UIPI
 	// 使 MagpieScalingChanged 消息不会被 UIPI 过滤
 	ChangeWindowMessageFilter(WM_MAGPIE_SCALINGCHANGED, MSGFLT_ADD);
 
@@ -165,6 +172,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	};
 	RegisterClassExW(&wcex);
 
+	// Make our window top-most to prevent it from being covered by magpie scaling window
+	// 创建置顶窗口以避免被缩放窗口遮挡
 	HWND hWnd = CreateWindowEx(WS_EX_TOPMOST, L"MagpieWatcher", L"MagpieWatcher", WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, 0, 0, 0, nullptr, nullptr, hInstance, nullptr);
 
@@ -172,8 +181,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		return FALSE;
 	}
 
+	// Keep Magpie scaling when our window gains focus
+	// 我们的窗口获得焦点时 Magpie 应继续缩放
 	SetProp(hWnd, L"Magpie.ToolWindow", (HANDLE)TRUE);
 
+	// Use class name to retrieve the handle of magpie scaling window
+	// 使用窗口类名检索缩放窗口句柄
 	UpdateHwndScaling(FindWindow(L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22", nullptr));
 
 	SetWindowPos(hWnd, NULL, 0, 0, std::lround(400 * dpiScale),
