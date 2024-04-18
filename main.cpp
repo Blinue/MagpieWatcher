@@ -128,11 +128,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		RECT clientRect;
 		GetClientRect(hWnd, &clientRect);
 
-		const int margin = std::lround(10 * dpiScale);
-		clientRect.left += margin;
-		clientRect.top += margin;
-		clientRect.right -= margin;
-		clientRect.bottom -= margin;
+		const int padding = std::lround(10 * dpiScale);
+		clientRect.left += padding;
+		clientRect.top += padding;
+		clientRect.right -= padding;
+		clientRect.bottom -= padding;
 		
 		DrawText(hdc, text.c_str(), (int)text.size(), &clientRect, DT_TOP | DT_LEFT | DT_WORDBREAK);
 
