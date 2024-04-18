@@ -149,6 +149,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_ LPWSTR    lpCmdLine,
 	_In_ int       nCmdShow
 ) {
+	// 使 MagpieScalingChanged 消息不会被 UIPI 过滤
+	ChangeWindowMessageFilter(WM_MAGPIE_SCALINGCHANGED, MSGFLT_ADD);
+
 	WNDCLASSEXW wcex{
 		.cbSize = sizeof(WNDCLASSEX),
 		.style = CS_HREDRAW | CS_VREDRAW,
