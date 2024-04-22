@@ -40,6 +40,10 @@ static void UpdateHwndScaling(HWND hWnd) {
 static void UpdateDpi(uint32_t dpi) {
 	dpiScale = dpi / double(USER_DEFAULT_SCREEN_DPI);
 
+	if (hUIFont) {
+		DeleteObject(hUIFont);
+	}
+
 	hUIFont = CreateFont(
 		std::lround(20 * dpiScale),
 		0,
@@ -143,6 +147,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	}
 	case WM_DESTROY:
 	{
+		if (hUIFont) {
+			DeleteObject(hUIFont);
+		}
 		PostQuitMessage(0);
 		return 0;
 	}
