@@ -150,6 +150,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		if (hUIFont) {
 			DeleteObject(hUIFont);
 		}
+
 		PostQuitMessage(0);
 		return 0;
 	}
@@ -170,8 +171,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		.cbSize = sizeof(WNDCLASSEX),
 		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WndProc,
-		.cbClsExtra = 0,
-		.cbWndExtra = 0,
 		.hInstance = hInstance,
 		.hCursor = LoadCursor(nullptr, IDC_ARROW),
 		.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1),
@@ -192,9 +191,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// 我们的窗口获得焦点时 Magpie 应继续缩放
 	SetProp(hWnd, L"Magpie.ToolWindow", (HANDLE)TRUE);
 
-	// Use class name to retrieve the handle of magpie scaling window
-	// 使用窗口类名检索缩放窗口句柄
-	UpdateHwndScaling(FindWindow(L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22", nullptr));
+	// Use class name to retrieve the handle of magpie scaling window.
+	// Make sure to check the visibility of the scaling window.
+	// 使用窗口类名检索缩放窗口句柄，注意应检查缩放窗口是否可见
+	{
+		HWND hwndTmp = FindWindow(L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22", nullptr);
+		if (IsWindowVisible(hwndTmp)) {
+			UpdateHwndScaling(hwndTmp);
+		}
+	}
 
 	SetWindowPos(hWnd, NULL, 0, 0, std::lround(400 * dpiScale),
 		std::lround(300 * dpiScale), SWP_NOMOVE | SWP_SHOWWINDOW);
