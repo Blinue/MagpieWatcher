@@ -151,6 +151,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			DeleteObject(hUIFont);
 		}
 
+		// 清理窗口属性
+		// Clear window properties
+		RemoveProp(hWnd, L"Magpie.ToolWindow");
+
 		PostQuitMessage(0);
 		return 0;
 	}
