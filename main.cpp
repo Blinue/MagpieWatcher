@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <CommCtrl.h>
 #include <string>
 #include <format>
 
@@ -12,6 +13,9 @@ HWND hwndScaling = NULL;
 HWND hwndSrc = NULL;
 RECT srcRect;
 RECT destRect;
+
+HWND hwndSizeUpBtn = NULL;
+HWND hwndSizeDownBtn = NULL;
 
 static void UpdateHwndScaling(HWND hWnd) {
 	hwndScaling = hWnd;
@@ -59,42 +63,71 @@ static void UpdateDpi(uint32_t dpi) {
 		DEFAULT_PITCH | FF_DONTCARE,
 		L"Microsoft YaHei UI"
 	);
+
+	SendMessage(hwndSizeUpBtn, WM_SETFONT, (WPARAM)hUIFont, TRUE);
+	SendMessage(hwndSizeDownBtn, WM_SETFONT, (WPARAM)hUIFont, TRUE);
+}
+
+static void UpdateSizeButtons(HWND hwndParent) {
+	RECT clientRect;
+	GetClientRect(hwndParent, &clientRect);
+
+	const int clientHeight = clientRect.bottom - clientRect.top;
+	const int padding = std::lround(10 * dpiScale);
+	const int btnWidth = std::lround(56 * dpiScale);
+	const int btnHeight = std::lround(30 * dpiScale);
+	SetWindowPos(hwndSizeUpBtn, NULL,
+		padding, clientHeight - padding - btnHeight, btnWidth, btnHeight, SWP_NOACTIVATE);
+	SetWindowPos(hwndSizeDownBtn, NULL,
+		padding + btnWidth + std::lround(4 * dpiScale), clientHeight - padding - btnHeight, btnWidth, btnHeight, SWP_NOACTIVATE);
+
+	EnableWindow(hwndSizeUpBtn, (BOOL)(INT_PTR)hwndScaling);
+	EnableWindow(hwndSizeDownBtn, (BOOL)(INT_PTR)hwndScaling);
 }
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == WM_MAGPIE_SCALINGCHANGED) {
+		if (wParam == 3) {
+			// 用户开始调整缩放窗口大小或移动缩放窗口，在此期间没有新事件。
+			// 使用定时器定期更新缩放信息。
+			SetTimer(hWnd, TIMER_ID, 50, nullptr);
+			return 0;
+		} else {
+			KillTimer(hWnd, TIMER_ID);
+		}
+		
 		switch (wParam) {
 		case 0:
-			KillTimer(hWnd, TIMER_ID);
-
+			// Scaling ended
+			// 缩放已结束或源窗口失去焦点
 			if (lParam == 0) {
-				// Scaling ended
-				// 缩放已结束
+				// 缩放结束
 				UpdateHwndScaling(NULL);
-				InvalidateRect(hWnd, nullptr, FALSE);
+				UpdateSizeButtons(hWnd);
+				InvalidateRect(hWnd, nullptr, TRUE);
 			}
 			
 			SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
 		case 1:
-		case 2:
 			// Scaling started
-			// 缩放已开始
-			if (wParam == 2) {
-				KillTimer(hWnd, TIMER_ID);
+			// 缩放已开始或源窗口回到前台
+			if (!hwndScaling) {
+				// 缩放开始
+				UpdateHwndScaling((HWND)lParam);
+				UpdateSizeButtons(hWnd);
+				InvalidateRect(hWnd, nullptr, TRUE);
 			}
-
-			UpdateHwndScaling(wParam == 1 ? (HWND)lParam : hwndScaling);
-			InvalidateRect(hWnd, nullptr, FALSE);
 
 			// Once scaling begins, place our window above magpie scaling window
 			// 缩放开始后将本窗口置于缩放窗口上面
 			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
-		case 3:
-			// 用户开始调整缩放窗口大小或移动缩放窗口，在此期间没有新事件。
-			// 使用定时器定期更新缩放信息。
-			SetTimer(hWnd, TIMER_ID, 50, nullptr);
+		case 2:
+			// 缩放窗口位置或大小改变
+			UpdateHwndScaling(hwndScaling);
+			InvalidateRect(hWnd, nullptr, TRUE);
+			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
 		default:
 			break;
@@ -105,6 +138,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	switch (message) {
 	case WM_CREATE:
 	{
+		const HMODULE hInst = GetModuleHandle(nullptr);
+		hwndSizeUpBtn = CreateWindow(L"BUTTON", L"Size+",
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 0, 0, hWnd, (HMENU)1, hInst, 0);
+		hwndSizeDownBtn = CreateWindow(L"BUTTON", L"Size-",
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 0, 0, hWnd, (HMENU)2, hInst, 0);
+
 		UpdateDpi(GetDpiForWindow(hWnd));
 		break;
 	}
@@ -112,7 +151,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	{
 		if (wParam == TIMER_ID) {
 			UpdateHwndScaling(hwndScaling);
-			InvalidateRect(hWnd, nullptr, FALSE);
+			InvalidateRect(hWnd, nullptr, TRUE);
 		}
 		break;
 	}
@@ -131,12 +170,44 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		);
 		break;
 	}
+	case WM_GETMINMAXINFO:
+	{
+		MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+		mmi->ptMinTrackSize = { std::lround(400 * dpiScale), std::lround(300 * dpiScale) };
+		return 0;
+	}
+	case WM_SIZE:
+	{
+		UpdateSizeButtons(hWnd);
+		return 0;
+	}
+	case WM_ERASEBKGND:
+	{
+		// 无需擦除背景，因为 WM_PAINT 绘制整个客户区
+		return TRUE;
+	}
+	case WM_CTLCOLORBTN:
+	{
+		// 使原生按钮控件边框外的背景透明
+		return NULL;
+	}
 	case WM_PAINT:
 	{
+		// 双缓冲绘图以防止闪烁
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
 
-		HGDIOBJ hOldFont = SelectObject(hdc, hUIFont);
+		RECT clientRect;
+		GetClientRect(hWnd, &clientRect);
+		int clientWidth = clientRect.right - clientRect.left;
+		int clientHeight = clientRect.bottom - clientRect.top;
+
+		HDC hdcMem = CreateCompatibleDC(hdc);
+		HBITMAP hbmMem = CreateCompatibleBitmap(hdc, clientWidth, clientHeight);
+		HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, hbmMem);
+		HFONT hOldFont = (HFONT)SelectObject(hdcMem, hUIFont);
+
+		FillRect(hdcMem, &clientRect, GetSysColorBrush(COLOR_WINDOW));
 
 		std::wstring text = []() -> std::wstring {
 			if (!hwndScaling) {
@@ -152,21 +223,42 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			return std::format(L"Scaling\n\nSource window: {}\nScale factor: {}", srcTitle, factor);
 		}();
 
-		RECT clientRect;
-		GetClientRect(hWnd, &clientRect);
-
 		const int padding = std::lround(10 * dpiScale);
 		clientRect.left += padding;
 		clientRect.top += padding;
 		clientRect.right -= padding;
 		clientRect.bottom -= padding;
 		
-		DrawText(hdc, text.c_str(), (int)text.size(), &clientRect, DT_TOP | DT_LEFT | DT_WORDBREAK);
+		DrawText(hdcMem, text.c_str(), (int)text.size(), &clientRect, DT_TOP | DT_LEFT | DT_WORDBREAK);
 
-		SelectObject(hdc, hOldFont);
+		BitBlt(hdc, 0, 0, clientWidth, clientHeight, hdcMem, 0, 0, SRCCOPY);
+
+		SelectObject(hdcMem, hOldFont);
+		SelectObject(hdcMem, hbmOld);
+		DeleteObject(hbmMem);
+		DeleteDC(hdcMem);
 
 		EndPaint(hWnd, &ps);
 		return 0;
+	}
+	case WM_COMMAND:
+	{
+		if (HIWORD(wParam) == BN_CLICKED && hwndScaling) {
+			RECT targetRect;
+			GetWindowRect(hwndScaling, &targetRect);
+
+			const LONG delta = lround((LOWORD(wParam) == 1 ? 25 : -25) * dpiScale);
+			SetWindowPos(
+				hwndScaling,
+				NULL,
+				targetRect.left - delta,
+				targetRect.top - delta,
+				targetRect.right - targetRect.left + 2 * delta,
+				targetRect.bottom - targetRect.top + 2 * delta,
+				SWP_NOZORDER | SWP_NOACTIVATE
+			);
+		}
+		break;
 	}
 	case WM_DESTROY:
 	{
@@ -190,20 +282,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// 使 MagpieScalingChanged 消息不会被 UIPI 过滤
 	ChangeWindowMessageFilter(WM_MAGPIE_SCALINGCHANGED, MSGFLT_ADD);
 
+	{
+		INITCOMMONCONTROLSEX icce{
+			.dwSize = sizeof(INITCOMMONCONTROLSEX),
+			.dwICC = ICC_STANDARD_CLASSES
+		};
+		InitCommonControlsEx(&icce);
+	}
+
 	WNDCLASSEXW wcex{
 		.cbSize = sizeof(WNDCLASSEX),
 		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WndProc,
 		.hInstance = hInstance,
 		.hCursor = LoadCursor(nullptr, IDC_ARROW),
-		.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1),
 		.lpszClassName = L"MagpieWatcher"
 	};
 	RegisterClassExW(&wcex);
 
 	// Make our window top-most to prevent it from being covered by magpie scaling window
 	// 创建置顶窗口以避免被缩放窗口遮挡
-	HWND hWnd = CreateWindow(L"MagpieWatcher", L"MagpieWatcher", WS_OVERLAPPEDWINDOW,
+	HWND hWnd = CreateWindow(L"MagpieWatcher", L"MagpieWatcher",
+		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT, 0, 0, 0, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd) {
@@ -220,13 +320,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		}
 	}
 
-	SetWindowPos(hWnd, hwndScaling ? HWND_TOPMOST : NULL, 0, 0, std::lround(400 * dpiScale),
-		std::lround(300 * dpiScale), SWP_NOMOVE | SWP_SHOWWINDOW);
+	SetWindowPos(
+		hWnd,
+		hwndScaling && (GetForegroundWindow() == hwndSrc) ? HWND_TOPMOST : NULL,
+		0, 0, std::lround(400 * dpiScale), std::lround(300 * dpiScale),
+		SWP_NOMOVE | SWP_SHOWWINDOW
+	);
+	UpdateSizeButtons(hWnd);
 
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		// 实现 tab 导航
+		if (!IsDialogMessage(hWnd, &msg)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
 	}
 
 	return (int)msg.wParam;
