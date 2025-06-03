@@ -1,10 +1,9 @@
-﻿#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <windows.h>
 #include <string>
 #include <format>
 
 static UINT WM_MAGPIE_SCALINGCHANGED = RegisterWindowMessage(L"MagpieScalingChanged");
+static UINT TIMER_ID = 1;
 
 double dpiScale = 1.0;
 HFONT hUIFont = NULL;
@@ -66,20 +65,36 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	if (message == WM_MAGPIE_SCALINGCHANGED) {
 		switch (wParam) {
 		case 0:
-			// Scaling ended
-			// 缩放已结束
-			UpdateHwndScaling(NULL);
-			InvalidateRect(hWnd, nullptr, TRUE);
+			KillTimer(hWnd, TIMER_ID);
+
+			if (lParam == 0) {
+				// Scaling ended
+				// 缩放已结束
+				UpdateHwndScaling(NULL);
+				InvalidateRect(hWnd, nullptr, FALSE);
+			}
+			
+			SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
 		case 1:
+		case 2:
 			// Scaling started
 			// 缩放已开始
-			UpdateHwndScaling((HWND)lParam);
-			InvalidateRect(hWnd, nullptr, TRUE);
+			if (wParam == 2) {
+				KillTimer(hWnd, TIMER_ID);
+			}
+
+			UpdateHwndScaling(wParam == 1 ? (HWND)lParam : hwndScaling);
+			InvalidateRect(hWnd, nullptr, FALSE);
 
 			// Once scaling begins, place our window above magpie scaling window
 			// 缩放开始后将本窗口置于缩放窗口上面
-			BringWindowToTop(hWnd);
+			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+			break;
+		case 3:
+			// 用户开始调整缩放窗口大小或移动缩放窗口，在此期间没有新事件。
+			// 使用定时器定期更新缩放信息。
+			SetTimer(hWnd, TIMER_ID, 50, nullptr);
 			break;
 		default:
 			break;
@@ -91,6 +106,14 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	case WM_CREATE:
 	{
 		UpdateDpi(GetDpiForWindow(hWnd));
+		break;
+	}
+	case WM_TIMER:
+	{
+		if (wParam == TIMER_ID) {
+			UpdateHwndScaling(hwndScaling);
+			InvalidateRect(hWnd, nullptr, FALSE);
+		}
 		break;
 	}
 	case WM_DPICHANGED:
@@ -151,10 +174,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			DeleteObject(hUIFont);
 		}
 
-		// 清理窗口属性
-		// Clear window properties
-		RemoveProp(hWnd, L"Magpie.ToolWindow");
-
 		PostQuitMessage(0);
 		return 0;
 	}
@@ -163,9 +182,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 }
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-	_In_opt_ HINSTANCE hPrevInstance,
-	_In_ LPWSTR    lpCmdLine,
-	_In_ int       nCmdShow
+	_In_opt_ HINSTANCE /*hPrevInstance*/,
+	_In_ LPWSTR /*lpCmdLine*/,
+	_In_ int /*nCmdShow*/
 ) {
 	// Ensure the MagpieScalingChanged message won't be filtered by UIPI
 	// 使 MagpieScalingChanged 消息不会被 UIPI 过滤
@@ -184,28 +203,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	// Make our window top-most to prevent it from being covered by magpie scaling window
 	// 创建置顶窗口以避免被缩放窗口遮挡
-	HWND hWnd = CreateWindowEx(WS_EX_TOPMOST, L"MagpieWatcher", L"MagpieWatcher", WS_OVERLAPPEDWINDOW,
+	HWND hWnd = CreateWindow(L"MagpieWatcher", L"MagpieWatcher", WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, 0, 0, 0, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd) {
 		return FALSE;
 	}
 
-	// Keep Magpie scaling when our window gains focus
-	// 我们的窗口获得焦点时 Magpie 应继续缩放
-	SetProp(hWnd, L"Magpie.ToolWindow", (HANDLE)TRUE);
-
 	// Use class name to retrieve the handle of magpie scaling window.
 	// Make sure to check the visibility of the scaling window.
 	// 使用窗口类名检索缩放窗口句柄，注意应检查缩放窗口是否可见
 	{
-		HWND hwndTmp = FindWindow(L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22", nullptr);
-		if (IsWindowVisible(hwndTmp)) {
-			UpdateHwndScaling(hwndTmp);
+		HWND hwndFound = FindWindow(L"Window_Magpie_967EB565-6F73-4E94-AE53-00CC42592A22", nullptr);
+		if (IsWindowVisible(hwndFound)) {
+			UpdateHwndScaling(hwndFound);
 		}
 	}
 
-	SetWindowPos(hWnd, NULL, 0, 0, std::lround(400 * dpiScale),
+	SetWindowPos(hWnd, hwndScaling ? HWND_TOPMOST : NULL, 0, 0, std::lround(400 * dpiScale),
 		std::lround(300 * dpiScale), SWP_NOMOVE | SWP_SHOWWINDOW);
 
 	MSG msg;
