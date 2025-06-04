@@ -86,9 +86,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				InvalidateRect(hWnd, nullptr, TRUE);
 			}
 			
-			// Remove top-most status
-			// 取消置顶
-			SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+			if (!isWindowed) {
+				// Remove topmost status
+				// 取消置顶
+				SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
+			}
+
 			break;
 		case 1:
 			// Scaling has started or the source window has regained focus
@@ -102,16 +105,28 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 			// Once scaling begins, place our window above the scaled window
 			// 缩放开始后将本窗口置于缩放窗口上面
-			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
+			if (isWindowed) {
+				// Topmost is not required in windowed scaling. We briefly set our window
+				// topmost and then revert it to ensure it's layered above the scaled window.
+				// 窗口模式缩放时无需置顶。这里通过先置顶再取消置顶来将本窗口置于缩放窗口上面
+				SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+			}
+
 			break;
 		case 2:
 			// The position or size of the scaled window has changed
 			// 缩放窗口位置或大小改变
 			UpdateHwndScaling(hwndScaling);
 			InvalidateRect(hWnd, nullptr, TRUE);
+
 			// Update the Z-order to ensure our window stays above the scaled window
 			// 更新 Z 轴顺序确保本窗口在缩放窗口上面
-			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
+			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
+			if (isWindowed) {
+				SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+			}
+
 			break;
 		default:
 			break;
