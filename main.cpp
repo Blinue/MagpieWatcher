@@ -10,6 +10,7 @@ HFONT hUIFont = NULL;
 
 HWND hwndScaling = NULL;
 HWND hwndSrc = NULL;
+bool isWindowed;
 RECT srcRect;
 RECT destRect;
 
@@ -24,6 +25,7 @@ static void UpdateHwndScaling(HWND hWnd) {
 	// 从窗口属性中检索缩放信息
 
 	hwndSrc = (HWND)GetProp(hwndScaling, L"Magpie.SrcHWND");
+	isWindowed = (bool)GetProp(hwndScaling, L"Magpie.Windowed");
 
 	srcRect.left = (LONG)(INT_PTR)GetProp(hwndScaling, L"Magpie.SrcLeft");
 	srcRect.top = (LONG)(INT_PTR)GetProp(hwndScaling, L"Magpie.SrcTop");
@@ -64,8 +66,9 @@ static void UpdateDpi(uint32_t dpi) {
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	if (message == WM_MAGPIE_SCALINGCHANGED) {
 		if (wParam == 3) {
-			// 用户开始调整缩放窗口大小或移动缩放窗口，在此期间没有新事件。
-			// 使用定时器定期更新缩放信息。
+			// User has started resizing or moving the scaled window. A timer is
+			// used to periodically update scaling information.
+			// 用户开始调整缩放窗口大小或移动缩放窗口。使用定时器定期更新缩放信息。
 			SetTimer(hWnd, TIMER_ID, 50, nullptr);
 			return 0;
 		} else {
@@ -74,33 +77,40 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		
 		switch (wParam) {
 		case 0:
-			// Scaling ended
+			// Scaling has ended or the source window has lost focus
 			// 缩放已结束或源窗口失去焦点
 			if (lParam == 0) {
+				// Scaling ended
 				// 缩放结束
 				UpdateHwndScaling(NULL);
 				InvalidateRect(hWnd, nullptr, TRUE);
 			}
 			
+			// Remove top-most status
+			// 取消置顶
 			SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
 		case 1:
-			// Scaling started
+			// Scaling has started or the source window has regained focus
 			// 缩放已开始或源窗口回到前台
 			if (!hwndScaling) {
+				// Scaling started
 				// 缩放开始
 				UpdateHwndScaling((HWND)lParam);
 				InvalidateRect(hWnd, nullptr, TRUE);
 			}
 
-			// Once scaling begins, place our window above magpie scaling window
+			// Once scaling begins, place our window above the scaled window
 			// 缩放开始后将本窗口置于缩放窗口上面
 			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
 		case 2:
+			// The position or size of the scaled window has changed
 			// 缩放窗口位置或大小改变
 			UpdateHwndScaling(hwndScaling);
 			InvalidateRect(hWnd, nullptr, TRUE);
+			// Update the Z-order to ensure our window stays above the scaled window
+			// 更新 Z 轴顺序确保本窗口在缩放窗口上面
 			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
 			break;
 		default:
@@ -146,11 +156,13 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	}
 	case WM_ERASEBKGND:
 	{
+		// No need to erase the background since WM_PAINT redraws the entire client area
 		// 无需擦除背景，因为 WM_PAINT 绘制整个客户区
 		return TRUE;
 	}
 	case WM_PAINT:
 	{
+		// Use double buffering to prevent flickering
 		// 双缓冲绘图以防止闪烁
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
@@ -178,7 +190,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			double factor = double(destRect.right - destRect.left) / (srcRect.right - srcRect.left);
 			factor = int(factor * 1000) / 1000.0;
 
-			return std::format(L"Scaling\n\nSource window: {}\nScale factor: {}", srcTitle, factor);
+			return std::format(L"{} scaling\n\nSource window: {}\nScale factor: {}",
+				isWindowed ? L"Windowed" : L"Fullscreen", srcTitle, factor);
 		}();
 
 		const int padding = std::lround(10 * dpiScale);
