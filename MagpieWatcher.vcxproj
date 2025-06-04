@@ -25,14 +25,23 @@
     <RootNamespace>MagpieWatcher</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
     <ProjectName>MagpieWatcher</ProjectName>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+  	<UseDebugLibraries>true</UseDebugLibraries>
+  	<LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+  	<UseDebugLibraries>false</UseDebugLibraries>
+  	<LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -44,24 +53,24 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
-  	<ClCompile>
-  	  <LanguageStandard>stdcpp20</LanguageStandard>
-  	  <LanguageStandard_C>stdc17</LanguageStandard_C>
-  	  <ConformanceMode>true</ConformanceMode>
-  	  <!-- 禁用 RTTI ，因为它会导致二进制膨胀 -->
-  	  <RuntimeTypeInfo>false</RuntimeTypeInfo>
-  	  <SDLCheck>true</SDLCheck>
-  	  <MultiProcessorCompilation>true</MultiProcessorCompilation>
-  	  <WarningLevel>Level4</WarningLevel>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <ConformanceMode>true</ConformanceMode>
+      <!-- 禁用 RTTI ，因为它会导致二进制膨胀 -->
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WarningLevel>Level4</WarningLevel>
       <PreprocessorDefinitions>_WINDOWS;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-  	  <!-- /await:strict: 禁用协程的非标准语言扩展 -->
-  	  <!-- /utf-8: 源代码使用 UTF-8 格式 -->
-  	  <!-- /Zc:__cplusplus: 更新 __cplusplus 宏 -->
-  	  <!-- /volatile:iso: 禁用 volatile 的语义扩展 -->
-  	  <!-- /fp:contract: 生成浮点收缩指令。浮点收缩指令是将两个浮点操作合并为一个指令的机器指令，例如 Fused-Multiply-Add (FMA) -->
-  	  <!-- fp:contract 可以和其他 fp 选项同时存在，因此每个项目可以分别指定自己的浮点模型 -->
-  	  <AdditionalOptions>%(AdditionalOptions) /await:strict /utf-8 /Zc:__cplusplus /volatile:iso /fp:contract</AdditionalOptions>
-  	</ClCompile>
+      <!-- /await:strict: 禁用协程的非标准语言扩展 -->
+      <!-- /utf-8: 源代码使用 UTF-8 格式 -->
+      <!-- /Zc:__cplusplus: 更新 __cplusplus 宏 -->
+      <!-- /volatile:iso: 禁用 volatile 的语义扩展 -->
+      <!-- /fp:contract: 生成浮点收缩指令。浮点收缩指令是将两个浮点操作合并为一个指令的机器指令，例如 Fused-Multiply-Add (FMA) -->
+      <!-- fp:contract 可以和其他 fp 选项同时存在，因此每个项目可以分别指定自己的浮点模型 -->
+      <AdditionalOptions>%(AdditionalOptions) /await:strict /utf-8 /Zc:__cplusplus /volatile:iso /fp:contract</AdditionalOptions>
+    </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -74,6 +83,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -81,6 +91,7 @@
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

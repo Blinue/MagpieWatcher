@@ -212,25 +212,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		EndPaint(hWnd, &ps);
 		return 0;
 	}
-	case WM_COMMAND:
-	{
-		if (HIWORD(wParam) == BN_CLICKED && hwndScaling) {
-			RECT targetRect;
-			GetWindowRect(hwndScaling, &targetRect);
-
-			const LONG delta = lround((LOWORD(wParam) == 1 ? 25 : -25) * dpiScale);
-			SetWindowPos(
-				hwndScaling,
-				NULL,
-				targetRect.left - delta,
-				targetRect.top - delta,
-				targetRect.right - targetRect.left + 2 * delta,
-				targetRect.bottom - targetRect.top + 2 * delta,
-				SWP_NOZORDER | SWP_NOACTIVATE
-			);
-		}
-		break;
-	}
 	case WM_DESTROY:
 	{
 		if (hUIFont) {
