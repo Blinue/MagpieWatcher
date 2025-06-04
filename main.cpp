@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <CommCtrl.h>
 #include <string>
 #include <format>
 
@@ -13,6 +14,9 @@ HWND hwndSrc = NULL;
 bool isWindowed;
 RECT srcRect;
 RECT destRect;
+
+HWND hwndSizeUpBtn = NULL;
+HWND hwndSizeDownBtn = NULL;
 
 static void UpdateHwndScaling(HWND hWnd) {
 	hwndScaling = hWnd;
@@ -61,6 +65,26 @@ static void UpdateDpi(uint32_t dpi) {
 		DEFAULT_PITCH | FF_DONTCARE,
 		L"Microsoft YaHei UI"
 	);
+
+	SendMessage(hwndSizeUpBtn, WM_SETFONT, (WPARAM)hUIFont, TRUE);
+	SendMessage(hwndSizeDownBtn, WM_SETFONT, (WPARAM)hUIFont, TRUE);
+}
+
+static void UpdateSizeButtons(HWND hwndParent) {
+	RECT clientRect;
+	GetClientRect(hwndParent, &clientRect);
+
+	const int clientHeight = clientRect.bottom - clientRect.top;
+	const int padding = std::lround(10 * dpiScale);
+	const int btnWidth = std::lround(56 * dpiScale);
+	const int btnHeight = std::lround(30 * dpiScale);
+	SetWindowPos(hwndSizeUpBtn, NULL,
+		padding, clientHeight - padding - btnHeight, btnWidth, btnHeight, SWP_NOACTIVATE);
+	SetWindowPos(hwndSizeDownBtn, NULL,
+		padding + btnWidth + std::lround(4 * dpiScale), clientHeight - padding - btnHeight, btnWidth, btnHeight, SWP_NOACTIVATE);
+
+	EnableWindow(hwndSizeUpBtn, (BOOL)(INT_PTR)hwndScaling);
+	EnableWindow(hwndSizeDownBtn, (BOOL)(INT_PTR)hwndScaling);
 }
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -83,6 +107,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				// Scaling ended
 				// 缩放结束
 				UpdateHwndScaling(NULL);
+				UpdateSizeButtons(hWnd);
 				InvalidateRect(hWnd, nullptr, TRUE);
 			}
 			
@@ -100,6 +125,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 				// Scaling started
 				// 缩放开始
 				UpdateHwndScaling((HWND)lParam);
+				UpdateSizeButtons(hWnd);
 				InvalidateRect(hWnd, nullptr, TRUE);
 			}
 
@@ -129,6 +155,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	switch (message) {
 	case WM_CREATE:
 	{
+		const HMODULE hInst = GetModuleHandle(nullptr);
+		hwndSizeUpBtn = CreateWindow(L"BUTTON", L"Size+",
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 0, 0, hWnd, (HMENU)1, hInst, 0);
+		hwndSizeDownBtn = CreateWindow(L"BUTTON", L"Size-",
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 0, 0, hWnd, (HMENU)2, hInst, 0);
+
 		UpdateDpi(GetDpiForWindow(hWnd));
 		break;
 	}
@@ -161,11 +193,21 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		mmi->ptMinTrackSize = { std::lround(400 * dpiScale), std::lround(300 * dpiScale) };
 		return 0;
 	}
+	case WM_SIZE:
+	{
+		UpdateSizeButtons(hWnd);
+		return 0;
+	}
 	case WM_ERASEBKGND:
 	{
 		// No need to erase the background since WM_PAINT redraws the entire client area
 		// 无需擦除背景，因为 WM_PAINT 绘制整个客户区
 		return TRUE;
+	}
+	case WM_CTLCOLORBTN:
+	{
+		// 使原生按钮控件边框外的背景透明
+		return NULL;
 	}
 	case WM_PAINT:
 	{
@@ -219,6 +261,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		EndPaint(hWnd, &ps);
 		return 0;
 	}
+	case WM_COMMAND:
+	{
+		if (HIWORD(wParam) == BN_CLICKED && hwndScaling) {
+			RECT targetRect;
+			GetWindowRect(hwndScaling, &targetRect);
+
+			const LONG delta = lround((LOWORD(wParam) == 1 ? 50 : -50) * dpiScale);
+			SetWindowPos(
+				hwndScaling, NULL, 0, 0,
+				targetRect.right - targetRect.left + delta,
+				targetRect.bottom - targetRect.top + delta,
+				SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+			);
+		}
+		break;
+	}
 	case WM_DESTROY:
 	{
 		if (hUIFont) {
@@ -240,6 +298,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// Ensure the MagpieScalingChanged message won't be filtered by UIPI
 	// 使 MagpieScalingChanged 消息不会被 UIPI 过滤
 	ChangeWindowMessageFilter(WM_MAGPIE_SCALINGCHANGED, MSGFLT_ADD);
+
+	{
+		INITCOMMONCONTROLSEX icce{
+			.dwSize = sizeof(INITCOMMONCONTROLSEX),
+			.dwICC = ICC_STANDARD_CLASSES
+		};
+		InitCommonControlsEx(&icce);
+	}
 
 	WNDCLASSEXW wcex{
 		.cbSize = sizeof(WNDCLASSEX),
@@ -277,11 +343,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		0, 0, std::lround(400 * dpiScale), std::lround(300 * dpiScale),
 		SWP_NOMOVE | SWP_SHOWWINDOW
 	);
+	UpdateSizeButtons(hWnd);
 
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		// 实现 tab 导航
+		if (!IsDialogMessage(hWnd, &msg)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
 	}
 
 	return (int)msg.wParam;
