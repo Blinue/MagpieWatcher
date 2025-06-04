@@ -119,14 +119,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			// 缩放窗口位置或大小改变
 			UpdateHwndScaling(hwndScaling);
 			InvalidateRect(hWnd, nullptr, TRUE);
-
-			// Update the Z-order to ensure our window stays above the scaled window
-			// 更新 Z 轴顺序确保本窗口在缩放窗口上面
-			SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
-			if (isWindowed) {
-				SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
-			}
-
 			break;
 		default:
 			break;
