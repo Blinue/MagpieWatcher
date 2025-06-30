@@ -24,6 +24,7 @@ public:
 	}
 
 protected:
+	// Prevent deletion through a base class pointer
 	// 确保无法通过基类指针删除这个对象
 	~WindowBaseT() noexcept {
 		Destroy();
