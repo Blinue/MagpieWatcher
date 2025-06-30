@@ -18,8 +18,6 @@ bool MainWindow::Create(HINSTANCE hInst) noexcept {
 		return false;
 	}
 
-	// Make our window top-most to prevent it from being covered by magpie scaling window
-	// 创建置顶窗口以避免被缩放窗口遮挡
 	CreateWindow(L"MagpieWatcher", L"MagpieWatcher",
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT, 0, 0, 0, nullptr, nullptr, hInst, this);
@@ -40,56 +38,7 @@ bool MainWindow::Create(HINSTANCE hInst) noexcept {
 
 LRESULT MainWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexcept {
 	if (msg == WM_MAGPIE_SCALINGCHANGED) {
-		OutputDebugString(std::format(
-			L"WM_MAGPIE_SCALINGCHANGED(wParam={},lParam={})\n", wParam, lParam).c_str());
-
-		if (wParam == 3) {
-			// User has started resizing or moving the scaled window. A timer is
-			// used to periodically update scaling information.
-			// 用户开始调整缩放窗口大小或移动缩放窗口。使用定时器定期更新缩放信息。
-			SetTimer(Handle(), TIMER_ID, 20, nullptr);
-		} else {
-			KillTimer(Handle(), TIMER_ID);
-
-			if (wParam == 0) {
-				// Scaling has ended or the source window has lost focus
-				// 缩放已结束或源窗口失去焦点
-				if (lParam == 0) {
-					// Scaling ended
-					// 缩放结束
-					_hwndScaling = NULL;
-					_UpdateSizeButtons();
-					InvalidateRect(Handle(), nullptr, TRUE);
-				}
-
-				if (!_isWindowedScaling) {
-					SetWindowPos(Handle(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
-				}
-			} else if (wParam == 1) {
-				// Scaling has started or the source window has regained focus
-				// 缩放已开始或源窗口回到前台
-				_hwndScaling = (HWND)lParam;
-				_UpdateScalingInfo();
-				_UpdateSizeButtons();
-				InvalidateRect(Handle(), nullptr, TRUE);
-
-				// Once scaling begins, place our window above the scaled window
-				// 缩放开始后将本窗口置于缩放窗口上面
-				SetWindowPos(Handle(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
-				if (_isWindowedScaling) {
-					// Topmost is not required in windowed scaling. We briefly set our window
-					// topmost and then revert it to ensure it's layered above the scaled window.
-					// 窗口模式缩放时无需置顶。这里通过先置顶再取消置顶来将本窗口置于缩放窗口上面
-					SetWindowPos(Handle(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
-				}
-			} else if (wParam == 2) {
-				// The position or size of the scaled window has changed
-				// 缩放窗口位置或大小改变
-				_UpdateScalingInfo();
-				InvalidateRect(Handle(), nullptr, TRUE);
-			}
-		}
-
+		_HandleScalingChangedMessage(wParam, lParam);
 		return 0;
 	}
 
@@ -267,6 +216,54 @@ void MainWindow::_UpdateScalingInfo() noexcept {
 	_destRect.top = (LONG)(INT_PTR)GetProp(_hwndScaling, L"Magpie.DestTop");
 	_destRect.right = (LONG)(INT_PTR)GetProp(_hwndScaling, L"Magpie.DestRight");
 	_destRect.bottom = (LONG)(INT_PTR)GetProp(_hwndScaling, L"Magpie.DestBottom");
+}
+
+void MainWindow::_HandleScalingChangedMessage(WPARAM wParam, LPARAM lParam) noexcept {
+	OutputDebugString(std::format(
+		L"WM_MAGPIE_SCALINGCHANGED(wParam={},lParam={})\n", wParam, lParam).c_str());
+
+	if (wParam == 3) {
+		// User has started resizing or moving the scaled window. A timer is
+		// used to periodically update scaling information.
+		// 用户开始调整缩放窗口大小或移动缩放窗口。使用定时器定期更新缩放信息。
+		SetTimer(Handle(), TIMER_ID, 20, nullptr);
+		return;
+	}
+
+	KillTimer(Handle(), TIMER_ID);
+
+	if (wParam == 0) {
+		// Scaling has ended or the source window has lost focus
+		// 缩放已结束或源窗口失去焦点
+		if (lParam == 0) {
+			// Scaling ended
+			// 缩放结束
+			_hwndScaling = NULL;
+			_UpdateSizeButtons();
+			InvalidateRect(Handle(), nullptr, TRUE);
+		}
+
+		SetWindowPos(Handle(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
+	} else if (wParam == 1) {
+		// Scaling has started or the source window has regained focus
+		// 缩放已开始或源窗口回到前台
+		if (!_hwndScaling) {
+			// Scaling started
+			// 缩放开始
+			_hwndScaling = (HWND)lParam;
+			_UpdateScalingInfo();
+			_UpdateSizeButtons();
+			InvalidateRect(Handle(), nullptr, TRUE);
+		}
+
+		SetWindowPos(Handle(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOMOVE);
+		BringWindowToTop(Handle());
+	} else if (wParam == 2) {
+		// The position or size of the scaled window has changed
+		// 缩放窗口位置或大小改变
+		_UpdateScalingInfo();
+		InvalidateRect(Handle(), nullptr, TRUE);
+	}
 }
 
 void MainWindow::_UpdateSizeButtons() const noexcept {

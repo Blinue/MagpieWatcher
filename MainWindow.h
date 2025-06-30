@@ -15,6 +15,8 @@ protected:
 private:
 	void _UpdateScalingInfo() noexcept;
 
+	void _HandleScalingChangedMessage(WPARAM wParam, LPARAM lParam) noexcept;
+
 	void _UpdateSizeButtons() const noexcept;
 
 	void _UpdateDpi(uint32_t dpi) noexcept;
