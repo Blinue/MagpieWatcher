@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="MagpieWatcher.vcxproj" Id="b26cb91d-5de3-468c-a513-130960501146" />
+</Solution>
